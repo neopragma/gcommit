@@ -1,0 +1,87 @@
+# Run the wrapper script 'gcommit', which selects the appropriate interpreter for the .gcommit script.
+DRY_RUN=false 
+
+usage() { 
+    echo "Usage: gcommit [-h] [-t] commit-message [initials...]" 1>&2; 
+    echo "  -h displays this help." 1>&2; 
+    echo "  -t displays the commit command without executing it." 1>&2; 
+    echo " "
+    echo "  After the commit message, provide zero or more initials" 1>&2; 
+    echo "  of the authors of the commit, from the .team_members file" 1>&2; 
+    echo "  in the current directory." 1>&2; 
+    echo " "
+    echo "  The format of each line in the .team_members file is:" 1>&2; 
+    echo "  initials=name <email>" 1>&2; 
+    echo "  e.g. fl=First Last <first.last@nowhere.man>" 1>&2; 
+    echo " " 
+    echo "  Initials can be any value but can't contain spaces or" 1>&2;
+    echo "  equals signs. The name can contain spaces." 1>&2;
+    exit 0; 
+}
+
+while getopts "ht" o; do
+    case "${o}" in
+        h)
+            usage
+            ;;
+        t)
+            DRY_RUN=true ;
+            echo "Running in dry-run mode. No commit will be made." ;
+            ;;
+        *)
+            usage
+            ;;
+    esac
+done
+shift $((OPTIND-1))
+
+# Commit message is the first argument
+
+if [ -z "$1" ]; then
+    echo "Error: Commit message is required." 1>&2
+    echo "Run gcommit -h for usage information." 1>&2
+    exit 1
+fi
+
+COMMIT_MSG="\"$1\""
+if [ $DRY_RUN = true ]; then
+    continue
+else    
+    shift  # Remove the commit message from the arguments
+fi
+
+# Map initials to name/email 
+fileName=".team_members" 
+declare -A AUTHORS 
+readarray -t lines < "$fileName"
+for line in "${lines[@]}"; do
+   if [ -n ${line%%=*} ]; then # Skip empty lines 
+       if [[ ${line%%=*} == \#* ]]; then
+           continue  # Skip comments
+       else
+         AUTHORS[${line%%=*}]=${line#*=}
+       fi
+   fi
+done
+
+# Build author lines
+CO_AUTHOR_LINES=""
+for INITIAL in "$@"; do 
+  INITIAL_LOWER=$(echo "$INITIAL" | tr '[:upper:]' '[:lower:]')
+  AUTHOR="${AUTHORS[$INITIAL_LOWER]}"
+  if [ -n "$AUTHOR" ]; then 
+    NAME=$(echo "$AUTHOR" | cut -d'<' -f1 | xargs)
+    EMAIL=$(echo "$AUTHOR" | cut -d'<' -f2 | tr -d '>')
+    CO_AUTHOR_LINES+='\n'"Author: $NAME <$EMAIL>"
+  else
+    echo "Warning: Unknown initials '$INITIAL' — skipping"
+  fi
+done
+
+# Run the git commit
+if [ "$DRY_RUN" = true ]; then
+    echo "Dry run: git commit -m $COMMIT_MSG$CO_AUTHOR_LINES"
+else
+    git commit -m "$COMMIT_MSG$CO_AUTHOR_LINES"
+fi
+

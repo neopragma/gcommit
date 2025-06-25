@@ -1,0 +1,8 @@
+#!/opt/homebrew/bin/bash
+exec .gcommit "$@"
+
+# This script is a wrapper for the .gcommit script, which is expected to be located in the same directory.
+# Substitute the appropriate shebang line for your environment if necessary.
+# E.g. 
+#!/usr/bin/env bash
+#! /usr/bin/bach 
