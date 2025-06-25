@@ -6,17 +6,31 @@ usage() {
     echo "  -h displays this help." 1>&2; 
     echo "  -t displays the commit command without executing it." 1>&2; 
     echo " "
-    echo "  After the commit message, provide zero or more initials" 1>&2; 
-    echo "  of the authors of the commit, from the .team_members file" 1>&2; 
-    echo "  in the current directory." 1>&2; 
+    echo "  You will be prompted for a commit type, with values" 1>&2; 
+    echo "  based on the Conventional Commit standard." 1>&2; 
     echo " "
+    echo "  You will be asked if this is a breaking change." 1>&2;
+    echo "  If so, you will be prompted for a description of the" 1>&2; 
+    echo "  breaking change." 1>&2;  
+    echo " "
+    echo "  You will be prompted to select one or more authors" 1>&2; 
+    echo "  from the .team_members file." 1>&2;
+    echo " "  
     echo "  The format of each line in the .team_members file is:" 1>&2; 
     echo "  initials=name <email>" 1>&2; 
     echo "  e.g. fl=First Last <first.last@nowhere.man>" 1>&2; 
     echo " " 
     echo "  Initials can be any value but can't contain spaces or" 1>&2;
     echo "  equals signs. The name can contain spaces." 1>&2;
-    exit 0; 
+    echo "  The resulting commit message will resemble the following:" 1>&2;
+    echo " "
+    echo "  feature: Add new feature" 
+    echo " "
+    echo "  Author: First Last <first.last@blah.com>"
+    echo "  Author: First Last <first.last@blah.com>"
+    echo " "
+    echo "  BREAKING CHANGE: Description of the breaking change" 1>&2;
+    exit 0;
 }
 
 while getopts "ht" o; do
@@ -35,20 +49,27 @@ while getopts "ht" o; do
 done
 shift $((OPTIND-1))
 
-# Commit message is the first argument
+select COMMIT_TYPE in feature fix refactor docs style test chore; do
+    case $COMMIT_TYPE in
+        feature|fix|refactor|docs|style|test|chore)
+            break
+            ;;
+        *)
+            echo "Invalid commit type. Please select a valid type." 1>&2
+            ;;
+    esac
+done 
 
-if [ -z "$1" ]; then
-    echo "Error: Commit message is required." 1>&2
-    echo "Run gcommit -h for usage information." 1>&2
-    exit 1
+BREAKING_CHANGE=""
+read -p "Is this a breaking change? " -n 1 -r
+echo    
+if [[ $REPLY =~ ^[Yy]$ ]]; then
+    echo "Please provide a description of the breaking change:"
+    read -p "Breaking change description: " BREAKING_CHANGE_DESC
+    BREAKING_CHANGE="\n\nBREAKING CHANGE: $BREAKING_CHANGE_DESC"    
 fi
 
-COMMIT_MSG="\"$1\""
-if [ $DRY_RUN = true ]; then
-    continue
-else    
-    shift  # Remove the commit message from the arguments
-fi
+read -p "Commit message: " COMMIT_MSG
 
 # Map initials to name/email 
 fileName=".team_members" 
@@ -64,19 +85,22 @@ for line in "${lines[@]}"; do
    fi
 done
 
-# Build author lines
-CO_AUTHOR_LINES=""
-for INITIAL in "$@"; do 
-  INITIAL_LOWER=$(echo "$INITIAL" | tr '[:upper:]' '[:lower:]')
-  AUTHOR="${AUTHORS[$INITIAL_LOWER]}"
-  if [ -n "$AUTHOR" ]; then 
-    NAME=$(echo "$AUTHOR" | cut -d'<' -f1 | xargs)
-    EMAIL=$(echo "$AUTHOR" | cut -d'<' -f2 | tr -d '>')
-    CO_AUTHOR_LINES+='\n'"Author: $NAME <$EMAIL>"
-  else
-    echo "Warning: Unknown initials '$INITIAL' — skipping"
-  fi
+select choice in "${AUTHORS[@]}" Done
+do
+  # Stop choosing on this option
+  [[ $choice = Done ]] && break
+  # Append the choice to the array
+  choices+=( "$choice" )
+  echo "Author $choice selected."
 done
+
+# Format author entries 
+for choice in "${choices[@]}"
+do
+    COMMIT_MSG+="\n\nAuthor: $choice"
+done
+
+COMMIT_MSG="\"$COMMIT_TYPE: $COMMIT_MSG$BREAKING_CHANGE\""
 
 # Run the git commit
 if [ "$DRY_RUN" = true ]; then
