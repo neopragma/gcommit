@@ -64,14 +64,21 @@ BREAKING_CHANGE=""
 read -p "Is this a breaking change? " -n 1 -r
 echo    
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Please provide a description of the breaking change:"
     read -p "Breaking change description: " BREAKING_CHANGE_DESC
-    BREAKING_CHANGE="\n\nBREAKING CHANGE: $BREAKING_CHANGE_DESC"    
+    BREAKING_CHANGE="BREAKING CHANGE: $BREAKING_CHANGE_DESC"    
 fi
 
-read -p "Commit message: " COMMIT_MSG
 
-# Map initials to name/email 
+# Prompt for commit message lines 
+#declare -A COMMIT_LINES 
+COMMIT_LINES=()
+while [ true ]; do   
+  read -p "Commit message: " COMMIT_LINE 
+  [[ $COMMIT_LINE == "" ]] && break 
+  COMMIT_LINES+=("$COMMIT_LINE")
+done 
+
+# Prompt for selection of authors
 fileName=".team_members" 
 declare -A AUTHORS 
 readarray -t lines < "$fileName"
@@ -85,27 +92,39 @@ for line in "${lines[@]}"; do
    fi
 done
 
+declare -a choices
 select choice in "${AUTHORS[@]}" Done
 do
-  # Stop choosing on this option
-  [[ $choice = Done ]] && break
-  # Append the choice to the array
-  choices+=( "$choice" )
-  echo "Author $choice selected."
+  [[ "$choice" == Done ]] && break
+  choices+=("Author: $choice")
+  echo "Author: $choice selected."
 done
-
-# Format author entries 
-for choice in "${choices[@]}"
-do
-    COMMIT_MSG+="\n\nAuthor: $choice"
-done
-
-COMMIT_MSG="\"$COMMIT_TYPE: $COMMIT_MSG$BREAKING_CHANGE\""
 
 # Run the git commit
 if [ "$DRY_RUN" = true ]; then
-    echo "Dry run: git commit -m $COMMIT_MSG$CO_AUTHOR_LINES"
+    printf "Dry run: \n" 
+    printf "git commit -m $COMMIT_TYPE: $COMMIT_LINES[0]" 
+
+    for line in "${COMMIT_LINES[@]:1}"; do
+        printf "$line \ \n"
+    done
+    for line in "${choices[@]}"; do
+        printf "\ \n-m $line"
+    done  
+    printf "\ \n"
+    printf "\ \n$BREAKING_CHANGE"
 else
-    git commit -m "$COMMIT_MSG$CO_AUTHOR_LINES"
+    COMMAND_TEXT="git commit -m \"$COMMIT_TYPE: $COMMIT_LINES\""
+    for line in "${COMMIT_LINES[@]:1}"; do 
+        COMMAND_TEXT+=" -m \"$line\""
+    done
+    for line in "${choices[@]}"; do
+        COMMAND_TEXT+=" -m \"$line\""
+    done  
+
+     exec ${COMMAND_TEXT}
+
+
+
 fi
 
