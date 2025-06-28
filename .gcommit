@@ -121,8 +121,11 @@ else
     for line in "${choices[@]}"; do
         COMMAND_TEXT+=" -m \"$line\""
     done  
+    if [ -n "$BREAKING_CHANGE" ]; then
+        COMMAND_TEXT+=" -m \"$BREAKING_CHANGE\""
+    fi
 
-     exec ${COMMAND_TEXT}
+    eval ${COMMAND_TEXT}
 
 
 
